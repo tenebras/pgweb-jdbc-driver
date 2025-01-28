@@ -48,7 +48,7 @@ class PgwebResultSet(
 
     override fun wasNull(): Boolean = isLastValueNull
 
-    override fun getString(columnIndex: Int): String? = value(columnIndex) as? String
+    override fun getString(columnIndex: Int): String? = value(columnIndex)?.toString()
     override fun getBoolean(columnIndex: Int): Boolean =
         getString(columnIndex)?.lowercase() in setOf("true", "yes", "1", "on")
 

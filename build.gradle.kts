@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "com.kostynenko.tools"
-version = "1.0-SNAPSHOT"
+version = "0.2-SNAPSHOT"
 
 repositories {
     mavenCentral()
@@ -43,10 +43,4 @@ tasks.jar {
     from({
         configurations.runtimeClasspath.get().filter { it.name.endsWith("jar") }.map { zipTree(it) }
     })
-
-//    from({
-//        configurations.compileClasspath.get()
-//            .filter { it.name.endsWith("jar") }
-//            .map { zipTree(it) }
-//    })
 }
