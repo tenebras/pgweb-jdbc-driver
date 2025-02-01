@@ -19,6 +19,7 @@ open class PgwebStatement(
     private var maxFieldSize = 0
     private var maxRows = 0
     private var fetchSize = 1000
+    private var isResultTaken = false
 
     override fun executeQuery(sql: String): ResultSet {
         execute(sql)
@@ -91,9 +92,26 @@ open class PgwebStatement(
         return rawResult?.isResultSet() == true
     }
 
-    override fun getResultSet(): ResultSet? = rawResult.takeIf { it?.isResultSet() == true }?.let { PgwebResultSet(it) }
+    override fun getResultSet(): ResultSet? {
+        return if (isResultTaken) {
+            null
+        } else {
+            rawResult.takeIf { it?.isResultSet() == true }?.let {
+                isResultTaken = true
+                PgwebResultSet(it)
+            }
+        }
+    }
 
-    override fun getUpdateCount(): Int = rawResult?.updateCount() ?: -1
+    override fun getUpdateCount(): Int {
+        return if (isResultTaken || rawResult?.isUpdateCount() == false) {
+            -1
+        } else {
+            isResultTaken = true
+            rawResult?.updateCount() ?: -1
+        }
+    }
+
     override fun getMoreResults(): Boolean = false
 
     override fun setFetchDirection(direction: Int) {

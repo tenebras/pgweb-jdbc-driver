@@ -88,7 +88,6 @@ class PgwebConnection(
         val body = response.body()
 
         if (response.statusCode() != 200) {
-
             println("Request response != 200")
             println(response.statusCode())
             println(body)
