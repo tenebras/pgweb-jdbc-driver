@@ -1,9 +1,10 @@
 package com.kostynenko.tools.pgwebjdbc
 
-import com.fasterxml.jackson.databind.PropertyNamingStrategies
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
 import org.apache.logging.log4j.kotlin.logger
+import tools.jackson.databind.PropertyNamingStrategies
+import tools.jackson.databind.json.JsonMapper
+import tools.jackson.module.kotlin.KotlinModule
+import tools.jackson.module.kotlin.readValue
 import java.net.URI
 import java.net.URLEncoder
 import java.net.http.HttpClient
@@ -26,9 +27,12 @@ class PgwebConnection(
     private val connectApiUri by lazy { URI("$pgwebUrl/api/connect") }
     private val queryApiUri by lazy { URI("$pgwebUrl/api/query") }
     private val sessionId = UUID.randomUUID().toString()
-    private val jsonMapper = jacksonObjectMapper()
-        .findAndRegisterModules()
-        .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
+    private val jsonMapper = JsonMapper.builder()
+        .findAndAddModules()
+        .addModule(KotlinModule.Builder().build())
+        .propertyNamingStrategy(PropertyNamingStrategies.SnakeCaseStrategy())
+        .build()
+
     private var connectionResponse: PgwebConnectionResponse? = null
     private val clientInfo = Properties().apply {
         setProperty("ApplicationName", "pgweb-jdbc")
@@ -59,12 +63,17 @@ class PgwebConnection(
         if (response.statusCode() != 200) {
             throw SQLException("Failed to connect: ${response.body()}")
         }
+        val body = response.body()
 
-        connectionResponse = jsonMapper.readValue<PgwebConnectionResponse>(response.body())
+        try {
+            connectionResponse = jsonMapper.readValue<PgwebConnectionResponse>(body)
+        } catch (e: Exception) {
+            logger.error("Failed to create connection. $body", e)
+        }
     }
 
-    fun databaseVersion() = requireNotNull(connectionResponse).version
-    fun currentUser() = requireNotNull(connectionResponse).currentUser
+    fun databaseVersion() = requireNotNull(connectionResponse) { "Connection response is null" }.version
+    fun currentUser() = requireNotNull(connectionResponse) { "Connection response is null" }.currentUser
 
     override fun createStatement(): Statement = PgwebStatement(this, jsonMapper)
     override fun prepareStatement(sql: String): PreparedStatement = PgwebPreparedStatement(this, jsonMapper, sql)
@@ -87,15 +96,11 @@ class PgwebConnection(
         val response = httpClient.send(request, BodyHandlers.ofString())
         val body = response.body()
 
-        if (response.statusCode() != 200) {
-            println("Request response != 200")
-            println(response.statusCode())
-            println(body)
-
-            if (response.statusCode() == 400) {
-                throw SQLException(jsonMapper.readValue<PgwebError>(body).error)
-            }
+        if (response.statusCode() == 400) {
+            throw SQLException(jsonMapper.readValue(body, PgwebError::class.java).error)
         }
+
+        logger.info("Native SQL response: $body .  ")
 
         return body
     }
@@ -124,7 +129,7 @@ class PgwebConnection(
         logger.info("setCatalog [$catalog]")
     }
 
-    override fun getCatalog(): String = requireNotNull(connectionResponse).currentDatabase
+    override fun getCatalog(): String = requireNotNull(connectionResponse) {"Connection response is null"}.currentDatabase
 
     override fun setTransactionIsolation(level: Int) {
         transactionIsolation = level
@@ -251,7 +256,7 @@ class PgwebConnection(
         logger.todo("setSchema [$schema]")
     }
 
-    override fun getSchema(): String = requireNotNull(connectionResponse).currentSchemas
+    override fun getSchema(): String = requireNotNull(connectionResponse){"Connection response is null"}.currentSchemas
 
     override fun abort(executor: Executor?) {
         logger.todo("abort")

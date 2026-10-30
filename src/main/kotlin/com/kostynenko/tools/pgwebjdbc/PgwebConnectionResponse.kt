@@ -3,7 +3,7 @@ package com.kostynenko.tools.pgwebjdbc
 import com.fasterxml.jackson.annotation.JsonAlias
 
 
-class PgwebConnectionResponse (
+data class PgwebConnectionResponse (
     val currentDatabase: String,
     val currentSchemas: String,
     val currentUser: String,

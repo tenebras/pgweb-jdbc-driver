@@ -411,10 +411,14 @@ class PgwebDatabaseMetaData(
     """
     )
 
-    override fun getTableTypes(): ResultSet = PgwebResultSet(
-        columns = listOf("TABLE_TYPE"),
-        rows = tableTypeClauses.keys.sorted().map { listOf(it) }
-    )
+    override fun getTableTypes(): ResultSet {
+        logger.info("getTableTypes")
+
+        return PgwebResultSet(
+            columns = listOf("TABLE_TYPE"),
+            rows = tableTypeClauses.keys.sorted().map { listOf(it) }
+        )
+    }
 
     override fun getColumns(
         catalog: String,
@@ -447,7 +451,7 @@ class PgwebDatabaseMetaData(
                 ORDER BY nspname,c.relname,attnum 
         """
         val rs = connection.createStatement().executeQuery(sql)
-        val rows = mutableListOf<List<Any?>>()
+        val rows = mutableListOf<List<String?>>()
 
         while (rs.next()) {
             val typeOid = rs.getInt("atttypid")
@@ -495,7 +499,7 @@ class PgwebDatabaseMetaData(
                     rs.getString("nspname"), // Schema
                     rs.getString("relname"), // Table name
                     rs.getString("attname"), // Column name
-                    sqlType,
+                    sqlType.toString(),
                     // Type name
                     if (rs.getString("adsrc")?.contains("nextval(") == true) {
                         when (type.name) {
@@ -507,7 +511,7 @@ class PgwebDatabaseMetaData(
                     } else {
                         type.name
                     },
-                    columnSize,//6
+                    columnSize.toString(),//6
                     null, // Buffer length
                     if ((sqlType == Types.NUMERIC || sqlType == Types.DECIMAL) && typeMod == -1) {
                         null
@@ -515,24 +519,24 @@ class PgwebDatabaseMetaData(
                         decimalDigits.toString()
                     },
                     "2".takeIf { "bit" == type.name || "varbit" == type.name } ?: "10",
-                    if (rs.getBoolean("attnotnull")) 0 else 1,
+                    (if (rs.getBoolean("attnotnull")) 0 else 1).toString(),
                     rs.getString("description"), // Description (if any)
                     rs.getString("adsrc"), // Column default
                     null, // sql data type (unused)
                     null, // sql datetime sub (unused)
-                    columnSize, // char octet length
+                    columnSize.toString(), // char octet length
                     rs.getString("attnum"), // ordinal position
                     if (rs.getBoolean("attnotnull")) "NO" else "YES", // Is nullable
                     null, // SCOPE_CATLOG
                     null, // SCOPE_SCHEMA
                     null, // SCOPE_TABLE
                     // SOURCE_DATA_TYPE
-                    if (baseTypeOid == 0) null else connection.types[baseTypeOid].sqlType
+                    if (baseTypeOid == 0) null else connection.types[baseTypeOid].sqlType.toString()
                 )
             )
 
         }
-
+        logger.debug("getColumns")
         return PgwebResultSet(
             columns = listOf(
                 "TABLE_CAT", //0
@@ -865,7 +869,7 @@ class PgwebDatabaseMetaData(
         schemaPattern: String?,
         functionNamePattern: String?,
         columnNamePattern: String?
-    ): ResultSet? {
+    ): ResultSet {
         val columns = listOf(
             "FUNCTION_CAT",
             "FUNCTION_SCHEM",
@@ -907,7 +911,7 @@ class PgwebDatabaseMetaData(
                     p.proname, 
                     p.oid::text
         """
-        val rows = mutableListOf<List<Any?>>();// rows
+        val rows = mutableListOf<List<String?>>();// rows
 //        byte[] isnullableUnknown = new byte[0];
 
         val stmt = connection.createStatement()
@@ -944,7 +948,7 @@ class PgwebDatabaseMetaData(
                         functionName,
                         "returnValue",
                         "4",
-                        type.sqlType,
+                        type.sqlType.toString(),
                         type.name,
                         null,
                         null,
@@ -1012,7 +1016,7 @@ class PgwebDatabaseMetaData(
                         functionName,
                         columnrs.getString("attname"),
                         "5",
-                        type.sqlType,
+                        type.sqlType.toString(),
                         type.name,
                         null,
                         null,
@@ -1029,7 +1033,7 @@ class PgwebDatabaseMetaData(
                 }
             }
         }
-
+        logger.info("getFunctionColumns")
         return PgwebResultSet(
             columns = columns,
             rows = rows
@@ -1114,7 +1118,11 @@ class PgwebDatabaseMetaData(
     )
 
     private fun PgwebResultSet.withUpperCaseColumnLabels() = PgwebResultSet(
-        result.copy(columns = result.columns.map { it.uppercase() })
+        RawPgwebResult(
+            columns = result.columns.map { it.uppercase() },
+            rows = result.rows,
+            stats = result.stats
+        )
     )
 
     private fun getImportedExportedKeys(

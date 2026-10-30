@@ -1,10 +1,12 @@
 package com.kostynenko.tools.pgwebjdbc
 
+import tools.jackson.databind.annotation.JsonDeserialize
 import java.time.Instant
 
-data class RawPgwebResult(
+@JsonDeserialize(using = RawPgwebResultDeserializer::class)
+class RawPgwebResult(
     val columns: List<String>,
-    val rows: List<List<Any?>>,
+    val rows: List<List<String?>>,
     val stats: Stats
 ) {
     fun isUpdateCount() = stats.columnsCount == 1 && columns[0] == "Rows Affected"
@@ -12,11 +14,11 @@ data class RawPgwebResult(
     fun updateCount(): Int = if (isUpdateCount()) rows[0][0] as Int else -1
 
     class Stats(
-        val columnsCount: Int,
-        val rowsCount: Int,
-        val rowsAffected: Int,
-        val queryStartTime: Instant,
-        val queryFinishTime: Instant,
-        val queryDurationMs: Long
+        val columnsCount: Int = 0,
+        val rowsCount: Int = 0,
+        val rowsAffected: Int = 0,
+        val queryStartTime: Instant = Instant.now(),
+        val queryFinishTime: Instant = Instant.now(),
+        val queryDurationMs: Long = 0
     )
 }

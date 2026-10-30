@@ -17,8 +17,9 @@ class PgwebResultSet(
 ) : ResultSet {
     private var isClosed = false
     private var fetchSize = 1000
+    private val metadata by lazy { PgwebResultSetMetaData(result) }
 
-    constructor(columns: List<String>, rows: List<List<Any?>>) : this(
+    constructor(columns: List<String>, rows: List<List<String?>>) : this(
         RawPgwebResult(
             columns = columns,
             rows = rows,
@@ -37,8 +38,18 @@ class PgwebResultSet(
 
     private var rowIdx: Int = -1
     private var isLastValueNull = false
-    private fun value(columnIndex: Int): Any? = result.rows[rowIdx][columnIndex - 1].also {
-        isLastValueNull = it == null
+    private fun value(columnIndex: Int): Any? {
+        logger.debug("Value: $columnIndex")
+
+        return try {
+            result.rows.getOrNull(rowIdx)?.getOrNull(columnIndex - 1).also {
+                isLastValueNull = it == null
+            }
+        } catch (e: Exception) {
+            logger.error("value: ${e.message}", e)
+
+            null
+        }
     }
 
     override fun next(): Boolean = ++rowIdx < result.stats.rowsCount
@@ -56,21 +67,16 @@ class PgwebResultSet(
         logger.todo("PgwebResultSet::getByte")
     }
 
-    override fun getShort(columnIndex: Int): Short {
-        val value = value(columnIndex)
-
-        return when (value) {
+    override fun getShort(columnIndex: Int): Short =
+        when (val value = value(columnIndex)) {
             is Short -> value
             is Int -> value.toShort()
             is Long -> value.toShort()
             else -> value.toString().toShort()
         }
-    }
 
-    override fun getInt(columnIndex: Int): Int {
-        val value = value(columnIndex)
-
-        return when (value) {
+    override fun getInt(columnIndex: Int): Int =
+        when (val value = value(columnIndex)) {
             is Int -> value
             is Long -> value.toInt()
             is Boolean -> if (value) 1 else 0
@@ -84,42 +90,32 @@ class PgwebResultSet(
 
             else -> value.toString().toInt()
         }
-    }
 
-    override fun getLong(columnIndex: Int): Long {
-        val value = value(columnIndex)
-
-        return when (value) {
+    override fun getLong(columnIndex: Int): Long =
+        when (val value = value(columnIndex)) {
             is Long -> value
             is Int -> value.toLong()
-            is String -> value.toLong()
+            is String -> value.toLongOrNull() ?: 0
             else -> value.toString().toLong()
         }
-    }
 
-    override fun getFloat(columnIndex: Int): Float {
-        val value = value(columnIndex)
-
-        return when(value) {
+    override fun getFloat(columnIndex: Int): Float =
+        when(val value = value(columnIndex)) {
             is Float -> value
             is Int -> value.toFloat()
             is Long -> value.toFloat()
             is Double -> value.toFloat()
             else -> value.toString().toFloatOrNull() ?: 0f
         }
-    }
 
-    override fun getDouble(columnIndex: Int): Double {
-        val value = value(columnIndex)
-
-        return when(value) {
+    override fun getDouble(columnIndex: Int): Double =
+        when(val value = value(columnIndex)) {
             is Double -> value
             is Float -> value.toDouble()
             is Int -> value.toDouble()
             is Long -> value.toDouble()
             else -> value.toString().toDoubleOrNull() ?: 0.0
         }
-    }
 
     @Deprecated("Deprecated in Java")
     override fun getBigDecimal(columnIndex: Int, scale: Int): BigDecimal? {
@@ -180,7 +176,10 @@ class PgwebResultSet(
     override fun getBinaryStream(columnLabel: String): InputStream? = getBinaryStream(findColumn(columnLabel))
 
     override fun getWarnings(): SQLWarning? {
-        logger.todo("PgwebResultSet::getWarnings")
+        //logger.todo("PgwebResultSet::getWarnings")
+        logger.debug("PgwebResultSet::getWarnings")
+
+        return null
     }
 
     override fun clearWarnings() {
@@ -191,18 +190,33 @@ class PgwebResultSet(
         logger.todo("PgwebResultSet::getCursorName")
     }
 
-    override fun getMetaData(): ResultSetMetaData = PgwebResultSetMetaData(result)
+    override fun getMetaData(): ResultSetMetaData = metadata
 
     override fun getObject(columnIndex: Int): Any? {
-        return getString(columnIndex)
-        //logger.todo("PgwebResultSet::getObject")
+        val type = metadata.resolveColumnType(columnIndex)
+        val value = value(columnIndex)
+        logger.info("Column: $columnIndex, ${type.first}, ${type.second}, ${type.third}")
+
+        if (value == null) {
+            return null
+        }
+
+        return when (type.first) {
+            Types.BOOLEAN -> getBoolean(columnIndex)
+            Types.BIGINT -> getLong(columnIndex)
+            Types.INTEGER -> getInt(columnIndex)
+            Types.SMALLINT -> getShort(columnIndex)
+            Types.REAL -> getFloat(columnIndex)
+            Types.DOUBLE -> getDouble(columnIndex)
+            Types.NUMERIC, Types.DECIMAL -> getBigDecimal(columnIndex)
+            Types.TIMESTAMP_WITH_TIMEZONE -> value.takeIf { it is String }?.let { v -> runCatching { Instant.parse(v.toString()) }.getOrNull() }
+            else -> getString(columnIndex)
+        }
     }
 
-    override fun getObject(columnLabel: String): Any? {
-        logger.todo("PgwebResultSet::getObject")
-    }
+    override fun getObject(columnLabel: String): Any? = getObject(findColumn(columnLabel))
 
-    override fun findColumn(columnLabel: String): Int = result.columns.indexOf(columnLabel) + 1
+    override fun findColumn(columnLabel: String): Int = (result.columns.indexOf(columnLabel).takeIf { it > -1 } ?: error("find column [$columnLabel] is out of bauds. [${result.columns.joinToString()}]")) + 1
 
     override fun getCharacterStream(columnIndex: Int): Reader? {
         logger.todo("PgwebResultSet::getCharacterStream")
@@ -212,13 +226,9 @@ class PgwebResultSet(
         logger.todo("PgwebResultSet::getCharacterStream")
     }
 
-    override fun getBigDecimal(columnIndex: Int): BigDecimal? {
-        logger.todo("PgwebResultSet::getBigDecimal")
-    }
+    override fun getBigDecimal(columnIndex: Int): BigDecimal? = getString(columnIndex)?.toBigDecimalOrNull()
 
-    override fun getBigDecimal(columnLabel: String): BigDecimal? {
-        logger.todo("PgwebResultSet::getBigDecimal")
-    }
+    override fun getBigDecimal(columnLabel: String): BigDecimal? = getBigDecimal(findColumn(columnLabel))
 
     override fun isBeforeFirst(): Boolean = rowIdx == -1
     override fun isAfterLast(): Boolean = rowIdx >= result.stats.rowsCount

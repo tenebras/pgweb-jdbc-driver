@@ -1,14 +1,14 @@
 package com.kostynenko.tools.pgwebjdbc
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
 import org.apache.logging.log4j.kotlin.logger
+import tools.jackson.databind.json.JsonMapper
+import tools.jackson.module.kotlin.readValue
 import java.sql.*
 
 
 open class PgwebStatement(
     private val connection: PgwebConnection,
-    private val jsonMapper: ObjectMapper
+    private val jsonMapper: JsonMapper
 ): Statement {
     private val logger = logger()
     
@@ -24,7 +24,7 @@ open class PgwebStatement(
     override fun executeQuery(sql: String): ResultSet {
         execute(sql)
 
-        return requireNotNull(resultSet)
+        return requireNotNull(resultSet) { "ResultSet was null" }
     }
 
     override fun executeUpdate(sql: String): Int {
@@ -75,7 +75,9 @@ open class PgwebStatement(
     }
 
     override fun getWarnings(): SQLWarning? {
-        logger.todo("PgwebStatement: getWarnings")
+        //logger.todo("PgwebStatement: getWarnings")
+        logger.debug("PgwebStatement: getWarnings")
+        return null
     }
 
     override fun clearWarnings() {
@@ -87,7 +89,14 @@ open class PgwebStatement(
     }
 
     override fun execute(sql: String): Boolean {
-        rawResult = jsonMapper.readValue<RawPgwebResult>(connection.nativeSQL(sql))
+        isResultTaken = false
+        rawResult = try {
+            jsonMapper.readValue<RawPgwebResult>(connection.nativeSQL(sql))
+        } catch (e: Exception) {
+            logger.error("EXEC ${e.message}", e)
+
+            null
+        }
 
         return rawResult?.isResultSet() == true
     }

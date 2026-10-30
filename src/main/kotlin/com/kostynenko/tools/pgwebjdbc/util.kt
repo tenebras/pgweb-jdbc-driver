@@ -6,3 +6,4 @@ fun KotlinLogger.todo(message: String): Nothing {
     debug("Not yet implemented: $message")
     TODO(message)
 }
+

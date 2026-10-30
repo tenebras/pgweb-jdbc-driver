@@ -1,7 +1,7 @@
 package com.kostynenko.tools.pgwebjdbc
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.logging.log4j.kotlin.logger
+import tools.jackson.databind.json.JsonMapper
 import java.io.InputStream
 import java.io.Reader
 import java.math.BigDecimal
@@ -13,7 +13,7 @@ import java.util.*
 
 class PgwebPreparedStatement(
     connection: PgwebConnection,
-    jsonMapper: ObjectMapper,
+    jsonMapper: JsonMapper,
     private var sql: String
 ) : PgwebStatement(
     connection,

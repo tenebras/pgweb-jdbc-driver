@@ -1,29 +1,30 @@
 plugins {
-    kotlin("jvm") version "2.0.21"
+    kotlin("jvm") version "2.4.0"
 }
 
 group = "com.kostynenko.tools"
-version = "0.2-SNAPSHOT"
+version = "0.3.1"
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.0.21")
+    implementation("org.postgresql:postgresql:42.7.14")
 
-    implementation("org.apache.logging.log4j:log4j-api:2.24.3")
-    implementation("org.apache.logging.log4j:log4j-core:2.24.3")
+    implementation(platform("tools.jackson:jackson-bom:3.2.4"))
+    implementation("tools.jackson.core:jackson-databind")
+    implementation("tools.jackson.module:jackson-module-kotlin")
+
+    implementation("org.apache.logging.log4j:log4j-api:2.26.1")
+    implementation("org.apache.logging.log4j:log4j-core:2.26.1")
     implementation("org.apache.logging.log4j:log4j-api-kotlin:1.5.0")
-
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.18.2")
-    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.2")
 
     testImplementation(kotlin("test"))
 }
 
 kotlin {
-    jvmToolchain(11)
+    jvmToolchain(17)
 }
 
 tasks.test {
